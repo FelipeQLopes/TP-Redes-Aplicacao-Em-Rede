@@ -10,7 +10,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * CLIENTE (roda no PC1) - interface Java Swing
+ * CLIENTE (roda no PC1 - Mac) - interface Java Swing
+ *
+ * Conexão de Rede:
+ *  - Na topologia física: conecta-se ao IP da WAN do R3 (TP-Link: 192.168.1.200) na porta 5000.
+ *    O R3 faz o Port Forwarding (NAT) para o servidor no PC2 (Windows: 10.0.0.10:5000).
+ *  - Em teste local: conecta-se a 127.0.0.1:5000.
  *
  * Threads:
  *  - EDT (Swing)      : interface e envio de mensagens
@@ -27,7 +32,7 @@ public class Cliente extends JFrame {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
 
-    private final JTextField campoIp = new JTextField("192.168.0.1", 12);
+    private final JTextField campoIp = new JTextField("192.168.1.200", 12);
     private final JTextField campoPorta = new JTextField("5000", 5);
     private final JComboBox<String> comboAlg = new JComboBox<>(Cifra.ALGORITMOS);
     private final JTextField campoChave = new JTextField("3", 8);
@@ -59,7 +64,7 @@ public class Cliente extends JFrame {
 
         // ---- topo: configuração
         JPanel topo = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        topo.add(new JLabel("IP do roteador (R1):"));
+        topo.add(new JLabel("IP WAN R3 (ou Servidor):"));
         topo.add(campoIp);
         topo.add(new JLabel("Porta:"));
         topo.add(campoPorta);

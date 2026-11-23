@@ -20,29 +20,42 @@ A aplicação consiste em um chat bidirecional seguro/cifrado entre duas máquin
 
 ## 🌐 Topologia de Rede e Roteamento (NAT)
 
-A topologia possui **exatamente 2 roteadores** intermediários (R1 e R2 — rotulado como R3 no arquivo do Packet Tracer `ProjetoRede.pkt` e no `Comandos.md`):
+A topologia física do laboratório é composta por **2 roteadores físicos** (o roteador intermediário R2 foi omitido, ligando R1 diretamente a R3 via cabo RJ45):
 
 ```text
-[ PC1 - Cliente ] 
-       │ 192.168.0.10/16
-       ▼ (Gateway: 192.168.0.1)
-┌────────────────┐
-│  Roteador 1 R1 │ (g0/0: 192.168.0.1 | g0/1: 172.16.1.1)
-└───────┬────────┘
-        │ NAT estático: 192.168.0.1:5000 -> 172.16.1.2:5000 (TCP/UDP)
-        ▼
-┌────────────────┐
-│  Roteador 2 R3 │ (g0/0: 172.16.1.2 | g0/1: 10.0.0.1)
-└───────┬────────┘
-        │ NAT estático: 172.16.1.2:5000 -> 10.0.0.10:5000 (TCP/UDP)
-        ▼
-[ PC2 - Servidor ] (10.0.0.10/8, porta 5000 TCP e UDP)
+[ PC1 - Cliente (Mac) ]
+       │ IP: 192.168.1.x (ex.: 192.168.1.10)
+       ▼ Gateway: 192.168.1.254 (Rede: 192.168.0.0/16 ou /24)
+┌────────────────────────────────────────────────────────┐
+│ Roteador 1 (R1) - Nokia G-1425G-A                      │
+│ - LAN IP: 192.168.1.254                                │
+│ - Port Forwarding: Porta 5000 (TCP/UDP) -> 192.168.1.200│
+└───────────────────────────┬────────────────────────────┘
+                            │ Cabo RJ45 (Porta LAN 1 do R1 ──► Porta WAN do R3)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ Roteador 3 (R3) - TP-Link TL-WR642G                    │
+│ - WAN IP (Estático): 192.168.1.200 (Gateway: 192.168.1.254)
+│ - LAN IP: 10.0.0.1 (Rede: 10.0.0.0/8 ou /24)           │
+│ - Virtual Server / Forwarding:                         │
+│     Porta 5000 (TCP/UDP) -> 10.0.0.10:5000 (PC2)       │
+└───────────────────────────┬────────────────────────────┘
+                            │ Porta LAN do R3
+                            ▼
+[ PC2 - Servidor (Windows) ] (IP: 10.0.0.10, Gateway: 10.0.0.1, Porta 5000 TCP e UDP)
 ```
 
-### Regras da Topologia
-1. **Cliente como Iniciador**: O PC1 sempre inicia as conexões TCP e os datagramas UDP em direção a `192.168.0.1:5000`. O servidor nunca abre conexão reversa.
-2. **Mesma Porta**: Tanto TCP quanto UDP utilizam a porta padrão `5000`.
-3. **Redirecionamento em Cascata**: Os pacotes destinados ao IP externo de R1 são repassados até o servidor no PC2 pelas regras de NAT estático.
+### Regras de Roteamento e Conexão
+1. **Destino da Conexão do Cliente (PC1 / Mac)**:
+   - O PC1 está fisicamente conectado à rede LAN do R1 (Nokia).
+   - A interface WAN do R3 (TP-Link) também está conectada à rede LAN do R1 com o IP estático `192.168.1.200`.
+   - Portanto, PC1 e a WAN do R3 compartilham o mesmo domínio de rede local (faixa `192.168.1.x`).
+   - O cliente Java no Mac conecta-se diretamente ao **IP da WAN do R3 (`192.168.1.200`)** na porta `5000` (TCP e UDP), **nunca** diretamente ao IP privado `10.0.0.10` (que está isolado atrás do NAT do R3).
+2. **Redirecionamento de Portas (Port Forwarding / NAT)**:
+   - **R3 (TP-Link)**: Ao receber requisições TCP e datagramas UDP na porta `5000` de sua WAN (`192.168.1.200`), redireciona via *Virtual Server* para o IP do PC2 (`10.0.0.10:5000`).
+   - **R1 (Nokia)**: Possui regra de *Port Forwarding* da porta `5000` apontando para o IP da WAN do R3 (`192.168.1.200`).
+3. **Adaptação de Máscara de Sub-rede**:
+   - Caso o firmware dos roteadores restrinja máscaras `/16` ou `/8` na interface web, utiliza-se a máscara padrão `/24` (`255.255.255.0`). Os hosts continuam operando normalmente nas sub-redes `192.168.1.x` e `10.0.0.x`.
 
 ---
 
@@ -122,17 +135,25 @@ java -cp app Cliente
 ### 4. Cenários de Teste
 
 #### A. Teste Local (mesma máquina)
-- No campo **IP do roteador (R1)** do cliente: digite `127.0.0.1`.
+- No campo **IP WAN R3 (ou Servidor)** do cliente: digite `127.0.0.1`.
 - Clique em **Conectar**.
 - Envie mensagens alternando os algoritmos de cifra (César, Vigenère, Nenhuma).
 - Digite uma mensagem no servidor para testar o envio aos clientes.
 
-#### B. Teste na Topologia com Roteadores (Laboratório / PCs reais)
-- Certifique-se de que os PCs e roteadores estão configurados conforme a tabela do [Comandos.md](Comandos.md):
-  - PC1: `192.168.0.10` (Gateway `192.168.0.1`)
-  - PC2: `10.0.0.10` (Gateway `10.0.0.1`)
-- No PC2, inicie o `Servidor`.
-- No PC1, inicie o `Cliente`, mantenha o IP `192.168.0.1` e porta `5000` e conecte.
+#### B. Teste na Topologia com Roteadores Físicos (Laboratório)
+- Certifique-se de que os PCs e roteadores estão configurados conforme detalhado no [Comandos.md](Comandos.md):
+  - **PC1 (Mac)**: IP `192.168.1.10` (Gateway `192.168.1.254` do R1 Nokia).
+  - **PC2 (Windows)**: IP `10.0.0.10` (Gateway `10.0.0.1` do R3 TP-Link).
+  - **R3 (TP-Link)**: WAN `192.168.1.200` com *Virtual Server* na porta `5000` (TCP/UDP) para `10.0.0.10:5000`.
+- No PC2 (Windows), inicie o `Servidor`:
+  ```bash
+  java -cp app Servidor 5000
+  ```
+- No PC1 (Mac), inicie o `Cliente`:
+  ```bash
+  java -cp app Cliente
+  ```
+- No campo **IP WAN R3 (ou Servidor)** do cliente, utilize o IP da WAN do R3: `192.168.1.200`, porta `5000`, e clique em **Conectar**.
 
 ---
 
